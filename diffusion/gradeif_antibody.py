@@ -417,7 +417,7 @@ class GraDe_IF(nn.Module):
         unnormalized_prob_X[torch.sum(unnormalized_prob_X, dim=-1) == 0] = 1e-5
         prob_X = unnormalized_prob_X / torch.sum(unnormalized_prob_X, dim=-1, keepdim=True)  #[N,d_t-1]
 
-        if self.alpha > 0:
+        if self.alpha > 0 and step:
             affinity, grad_x = data.affinity_fn(noise_data.x)
             p_eta_x = torch.softmax(- self.alpha * grad_x, dim=-1)
             prob_X_unnormalized = p_eta_x * prob_X
@@ -457,7 +457,7 @@ class GraDe_IF(nn.Module):
             t_array = s_array + step
             s_norm = s_array / self.timesteps
             t_norm = t_array /self.timesteps
-            zt , final_predicted_X  = self.sample_p_zs_given_zt(t_norm, s_norm,zt, data,cond,diverse,step,last_step=s_int==stop,topk=topk)
+            zt , final_predicted_X  = self.sample_p_zs_given_zt(t_norm, s_norm,zt, data,cond,diverse,step=(s_int==stop+step),last_step=s_int==stop,topk=topk)
         return zt,final_predicted_X
 
 

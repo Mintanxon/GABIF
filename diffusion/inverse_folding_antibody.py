@@ -46,13 +46,13 @@ def load_fasta_sequence(fasta_file):
     # only load first sequence
     return str(next(SeqIO.parse(fasta_file, 'fasta')).seq)
 
-default_model_path = 'results/weight/BLOSUM_3M_small_antibody.pt'
+default_model_path = 'results/weight/UNIFORM_3M_small_antibody.pt'
 redesigned_regions = ['CDRH1', 'CDRH2', 'CDRH3', 'CDRL1', 'CDRL2', 'CDRL3', 'AllCDRs', 'FullH', 'FullL', 'FullSequence']
 
 parser = argparse.ArgumentParser(description='Graph Denoising Diffusion for Antibody Inverse Folding')
-parser.add_argument('--ab_chainid1', default='H', help='Chain id for antibody heavy chain (default H)')
-parser.add_argument('--ab_chainid2', default='L', help='Chain id for antibody light chain (default L)')
-parser.add_argument('--ag_chainid', default='A', help='Chain id for antigen chain (default A)')
+parser.add_argument('--ab-chainid1', default='H', help='Chain id for antibody heavy chain (default H)')
+parser.add_argument('--ab-chainid2', default='L', help='Chain id for antibody light chain (default L)')
+parser.add_argument('--ag-chainid', default='A', help='Chain id for antigen chain (default A)')
 parser.add_argument('--proaffinity-inter-graph', help='Path for inter graph built by ProAffinity-GNN, only used when guidance')
 parser.add_argument('--proaffinity-indi-graph', help='Path for individual graph built by ProAffinity-GNN, only used when guidance, +_1 represents graph1 and +_2 represents graph2')
 parser.add_argument('--proaffinity-seq-ab1', help='Path for antibody heavy chain sequence fasta for ProAffinity-GNN prediction, only used when guidance, if not specified, use sequence from pdb')
@@ -62,9 +62,9 @@ parser.add_argument('-i', '--input', required=True, help='Input antibody pdb, sh
 parser.add_argument('-o', '--output', help='Output JSON file with generated sequences')
 parser.add_argument('-m', '--model-path', default=default_model_path, help='GraDe-IF model path (default finetuned on SAbDab antibody dataset)')
 parser.add_argument('-d', '--device', default='cuda:0' if torch.cuda.is_available() else 'cpu', help='Which device for model to inference (default cuda:0)')
-parser.add_argument('-n', '--num', default=10, type=int, help='Number of sequences to sample (default 10)')
-parser.add_argument('-s', '--step', default=10, type=int, help='Number of denoising steps (default 10), fewer steps mean higher diversity while more steps mean higher recovery rate')
-parser.add_argument('--alpha', default=200, type=float, help='Coefficient alpha used in guidance (default 200)')
+parser.add_argument('-n', '--num', default=50, type=int, help='Number of sequences to sample (default 10)')
+parser.add_argument('-s', '--step', default=50, type=int, help='Step size in denoising stage (default 50)')
+parser.add_argument('--alpha', default=300, type=float, help='Coefficient alpha used in guidance (default 300)')
 parser.add_argument('--guidance', action="store_true", help='Whether to use affinity guidance by ProAffinity-GNN during GraDe-IF inference')
 parser.add_argument('--redesigned-regions', nargs="+", choices=redesigned_regions, default=['CDRH3'], help='Which region should be redesigned (default CDRH3)')
 args = parser.parse_args()
@@ -95,7 +95,7 @@ if args.guidance:
     
     from antibody.proaffinity_gnn import predict_affinity, get_esm_embedding, get_esm_tokens, esm_to_gradeif_tokens
     wt_pKa = predict_affinity(data, data1, data2, device)
-    target = wt_pKa + 2
+    target = wt_pKa - 2
 
 cdrh1_index = input_graph.cdrh1[input_graph.chainid == ord(ab_chainid1)].nonzero().squeeze().tolist()
 cdrh2_index = input_graph.cdrh2[input_graph.chainid == ord(ab_chainid1)].nonzero().squeeze().tolist()
@@ -210,7 +210,7 @@ if args.guidance:
 
     input_graph.affinity_fn = affinity_fn
 
-step = 500 // args.step
+step = args.step
 alpha = args.alpha if args.guidance else 0
 ckpt = torch.load(args.model_path, map_location=device)
 config = ckpt['config']
@@ -220,35 +220,62 @@ diffusion = GraDe_IF(model = gnn,config=config)
 diffusion.alpha = alpha
 diffusion = EMA(diffusion)
 diffusion.load_state_dict(ckpt['ema'])
+diffusion = diffusion.to(device)
+input_graph = input_graph.to(device)
+
+def sample_graph_to_sequence(sample_graph):
+    sample_seq = graph_to_seq(sample_graph)
+    masked_sample_seq = [redesigned_mask_symbol] * len(sample_seq)
+    for i in redesigned_mask.nonzero():
+        masked_sample_seq[i] = sample_seq[i]
+    masked_sample_ab_seq1 = ''.join(masked_sample_seq[i] for i in sequence_masks['FullH'].nonzero())
+    masked_sample_ab_seq2 = ''.join(masked_sample_seq[i] for i in sequence_masks['FullL'].nonzero())
+
+    mutation_num = 0
+    sample_ab_seq1 = list(pdb_ab_seq1)
+    for i in range(len(sample_ab_seq1)):
+        if masked_sample_ab_seq1[i] != redesigned_mask_symbol:
+            mutation_num += (sample_ab_seq1[i] != masked_sample_ab_seq1[i])
+            sample_ab_seq1[i] = masked_sample_ab_seq1[i]
+
+    sample_ab_seq2 = list(pdb_ab_seq2)
+    for i in range(len(sample_ab_seq2)):
+        if masked_sample_ab_seq2[i] != redesigned_mask_symbol:
+            mutation_num += (sample_ab_seq2[i] != masked_sample_ab_seq2[i])
+            sample_ab_seq2[i] = masked_sample_ab_seq2[i]
+
+    sample_ab = {
+        ab_chainid1: ''.join(sample_ab_seq1),
+        ab_chainid2: ''.join(sample_ab_seq2),
+        ag_chainid: pdb_ag_seq,
+        'mutation_num': mutation_num
+    }
+    if args.guidance:
+        sample_ab['affinity'] = affinity_fn(sample_graph)[0]
+    return sample_ab
 
 with torch.no_grad():
-    for _ in trange(args.num, desc=f'Sample {args.redesigned_regions} from {os.path.split(args.input)[1]}'):
-        prob, sample_graph = diffusion.ema_model.ddim_sample(input_graph,cond=~redesigned_mask,step=step)
-        sample_seq = graph_to_seq(sample_graph)
-        masked_sample_seq = [redesigned_mask_symbol] * len(sample_seq)
-        for i in redesigned_mask.nonzero():
-            masked_sample_seq[i] = sample_seq[i]
-        masked_sample_ab_seq1 = ''.join(masked_sample_seq[i] for i in sequence_masks['FullH'].nonzero())
-        masked_sample_ab_seq2 = ''.join(masked_sample_seq[i] for i in sequence_masks['FullL'].nonzero())
+    all_prob = []
+    recovery = float('nan')
+    perplexity = float('nan')
+    with trange(args.num, ncols=135) as tbar:
+        tbar.set_description(f'Sample {args.redesigned_regions} from {os.path.split(args.input)[1]}')
+        for _ in tbar:
+            prob, sample_graph = diffusion.ema_model.ddim_sample(input_graph,step=step,cond=~redesigned_mask)
+            all_prob.append(prob)
+            ensemble_prob = torch.stack(all_prob).mean(dim = 0)
+            recovery = ((ensemble_prob[redesigned_mask].argmax(dim=1) == input_graph.x[redesigned_mask].argmax(dim = 1)).sum()/input_graph.x[redesigned_mask].shape[0]).item()
+            perplexity = torch.exp(F.cross_entropy(ensemble_prob[redesigned_mask],input_graph.x[redesigned_mask].argmax(dim = 1), reduction='mean')).item()
+            sample_ab = sample_graph_to_sequence(sample_graph)
+            results['sampled_sequences'].append(sample_ab)
 
-        sample_ab_seq1 = list(pdb_ab_seq1)
-        for i in range(len(sample_ab_seq1)):
-            if masked_sample_ab_seq1[i] != redesigned_mask_symbol:
-                sample_ab_seq1[i] = masked_sample_ab_seq1[i]
+            tbar.set_postfix({
+                'recovery': f'{recovery:.3f}',
+                'perplexity': f'{perplexity:.3f}'
+            })
 
-        sample_ab_seq2 = list(pdb_ab_seq2)
-        for i in range(len(sample_ab_seq2)):
-            if masked_sample_ab_seq2[i] != redesigned_mask_symbol:
-                sample_ab_seq2[i] = masked_sample_ab_seq2[i]
+        results['ensemble_sequence'] = sample_graph_to_sequence(ensemble_prob)
 
-        sample_ab = {
-            ab_chainid1: ''.join(sample_ab_seq1),
-            ab_chainid2: ''.join(sample_ab_seq2),
-            ag_chainid: pdb_ag_seq,
-        }
-        if args.guidance:
-            sample_ab['affinity'] = affinity_fn(sample_graph)[0]
-        results['sampled_sequences'].append(sample_ab)
 
 output_file = args.output
 if not args.output:

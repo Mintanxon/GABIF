@@ -10,14 +10,15 @@ conda env create -f environment.yml
 
 Here is a brief usage example:
 ```shell
-# for simply sample sequences w/o guidance
+# for simply sample sequences without guidance
 python inverse_folding_antibody.py \
     -i <input_imgt_antibody_pdb_path> \
     --ab_chainid1 H \
     --ab_chainid2 L \
     --ag_chainid A \
     --redesigned-regions CDRH3
-# for sample sequences w/ ProAffinity-GNN guidance (Use 1ahw in ProAffinity-GNN demo data as example)
+    
+# for sample sequences with ProAffinity-GNN guidance (Use 1ahw in ProAffinity-GNN demo data as example)
 python inverse_folding_antibody.py \
     -i <input_imgt_antibody_pdb_path> \
     --ab_chainid1 A \
