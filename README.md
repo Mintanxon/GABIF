@@ -5,6 +5,7 @@ To install requirements:
 ```
 conda env create -f environment.yml
 ```
+To run the guidance of ProAffinity-GNN, you need to prepare data as required by ProAffinity-GNN and ensure it run successfully. The instructions for ProAffinity-GNN can be found at: [https://github.com/legendzzy/ProAffinity-GNN](https://github.com/legendzzy/ProAffinity-GNN).
 ## Usage
 `diffusion/inverse_folding_antibody.py` is the main entry of the model. 
 
@@ -17,7 +18,7 @@ python inverse_folding_antibody.py \
     --ab_chainid2 L \
     --ag_chainid A \
     --redesigned-regions CDRH3
-    
+
 # for sample sequences with ProAffinity-GNN guidance (Use 1ahw in ProAffinity-GNN demo data as example)
 python inverse_folding_antibody.py \
     -i <input_imgt_antibody_pdb_path> \
