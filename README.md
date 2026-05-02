@@ -1,4 +1,4 @@
-# GraDe_abIF: Graph Denoising Diffusion Model for Antibody Inverse Folding with Regressor Guidance
+# GABIF: Graph Denoising Diffusion Model for Antibody Inverse Folding with Regressor Guidance
 
 ## Requirements
 To install requirements:
