@@ -1,11 +1,15 @@
 # GABIF: Graph Denoising Diffusion Model for Antibody Inverse Folding with Regressor Guidance
 
+## Overview
+<img width="2852" height="1796" alt="image" src="https://github.com/user-attachments/assets/3342d25f-b707-4318-961e-939a296646a5" />
+
 ## Requirements
 To install requirements:
 ```
 conda env create -f environment.yml
 ```
 To run the guidance of ProAffinity-GNN, you need to prepare data as required by ProAffinity-GNN and ensure it run successfully. The instructions for ProAffinity-GNN can be found at: [https://github.com/legendzzy/ProAffinity-GNN](https://github.com/legendzzy/ProAffinity-GNN).
+
 ## Usage
 `diffusion/inverse_folding_antibody.py` is the main entry of the model. 
 
@@ -34,3 +38,7 @@ python inverse_folding_antibody.py \
     --guidance
 ```
 For more parameter details, please run `python inverse_folding_antibody.py -h`.
+
+## Data
+Antibody data used in this work are all downloaded from https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab, training/val/test data are split by `antibody_split.pt`. We use default settings for finetuning and testing in our experiments, so we will not elaborate on the configuration settings. For more details, please refer to the codes of this repository (`diffusion/gradeif.py` for training and `diffusion/inverse_folding_antibody.py` for inference), [GraDe-IF](https://github.com/ykiiiiii/GraDe_IF) and [ProAffinity-GNN](https://github.com/legendzzy/ProAffinity-GNN). 
+
