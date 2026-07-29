@@ -43,7 +43,7 @@ For more parameter details, please run `python inverse_folding_antibody.py -h`.
 Antibody data used in this work are all downloaded from https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab, training/val/test data are split by `antibody_split.pt`. We use default settings for finetuning and testing in our experiments, so we will not elaborate on the configuration settings. For more details, please refer to the codes of this repository (`diffusion/gradeif.py` for training and `diffusion/inverse_folding_antibody.py` for inference), [GraDe-IF](https://github.com/ykiiiiii/GraDe_IF) and [ProAffinity-GNN](https://github.com/legendzzy/ProAffinity-GNN). 
 
 Training Settings
-- Training Dataset: 3377 Sabdab antibody-antigen complexes for GABIF (with >700 affinity data for ProAffinity-GNN)
+- Training Dataset: 3,377 Sabdab antibody-antigen complexes for GABIF (with >700 affinity data for ProAffinity-GNN)
 - Learning rate: 1e-4
 - Weight decay: 1e-2
 - Batch size: 64
